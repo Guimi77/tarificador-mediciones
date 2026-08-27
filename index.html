@@ -8,71 +8,75 @@
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <strong>ELÉCTRICA BT</strong>
-      <span>Tarificador de mediciones</span>
-    </div>
-    <span class="badge">Borrador interno</span>
+    <div><strong>ELÉCTRICA BT</strong><span>Tarificador de mediciones</span></div>
+    <span class="badge">Desarrollo interno</span>
   </header>
 
   <main class="container">
     <section class="hero">
       <p class="eyebrow">PRESUPUESTOS · MEDICIONES</p>
-      <h1>Convierte mediciones en una valoración revisable</h1>
-      <p>Pega las partidas, revisa cantidades y precios y conserva el criterio usado para cada valoración antes de llevarla a Odoo.</p>
+      <h1>Valoración revisable de mediciones</h1>
+      <p>Introduce partidas, descompón cada una en productos o conceptos y conserva el criterio de cálculo antes de trasladar el resultado a Odoo.</p>
     </section>
 
     <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>1. Introducir mediciones</h2>
-          <p>Una partida por línea. Formato recomendado: cantidad · referencia o descripción · unidad.</p>
-        </div>
-      </div>
-      <textarea id="measurementInput" rows="9" placeholder="Ejemplo:\n12 | Punto de luz sencillo | ud\n35 | Línea 3x2,5 mm² | m\n1 | Cuadro eléctrico según esquema | ud"></textarea>
-      <div class="actions">
-        <button id="loadExample" class="secondary">Cargar ejemplo</button>
-        <button id="analyze">Analizar mediciones</button>
-      </div>
+      <div class="panel-head"><div><h2>1. Introducir mediciones</h2><p>Una partida por línea: cantidad · referencia/descripción · unidad.</p></div></div>
+      <textarea id="measurementInput" rows="8" placeholder="12 | Punto de luz sencillo | ud\n35 | Línea 3x2,5 mm² | m\n1 | Cuadro eléctrico según esquema | ud"></textarea>
+      <div class="actions"><button id="loadExample" class="secondary">Cargar ejemplo</button><button id="analyze">Analizar mediciones</button></div>
     </section>
 
     <section id="resultsPanel" class="panel hidden">
       <div class="panel-head">
-        <div>
-          <h2>2. Revisar partidas</h2>
-          <p>Primero cantidad y después referencia/descripción.</p>
-        </div>
+        <div><h2>2. Revisar y descomponer partidas</h2><p>Primero cantidad y después referencia/descripción. Cada partida puede contener varios componentes.</p></div>
         <button id="addRow" class="secondary">+ Añadir partida</button>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Cantidad</th><th>Referencia / descripción</th><th>Unidad</th><th>Precio unit.</th><th>Total</th><th>Estado</th><th></th></tr></thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </div>
+      <div id="cards" class="cards"></div>
       <div class="summary">
         <div><span>Partidas</span><strong id="lineCount">0</strong></div>
         <div><span>Total estimado</span><strong id="grandTotal">0,00 €</strong></div>
       </div>
+      <div class="actions"><button id="exportCsv" class="secondary">Exportar CSV</button></div>
     </section>
 
     <section id="tracePanel" class="panel hidden">
       <h2>3. Trazabilidad</h2>
-      <p>Cada valoración indicará en qué se basa. En esta primera versión, los precios introducidos manualmente quedan identificados como tales.</p>
+      <p>El export incluye el criterio usado para cada componente. Los cuadros “según esquema” no se valoran hasta adjuntar un esquema.</p>
       <div id="traceList" class="trace-list"></div>
     </section>
   </main>
 
-  <template id="rowTemplate">
-    <tr>
-      <td><input class="qty" type="number" min="0" step="0.01" /></td>
-      <td><input class="description" type="text" /></td>
-      <td><input class="unit" type="text" /></td>
-      <td><input class="price" type="number" min="0" step="0.01" placeholder="0,00" /></td>
-      <td class="total">0,00 €</td>
-      <td class="status"></td>
-      <td><button class="icon-button remove" title="Eliminar">×</button></td>
-    </tr>
+  <template id="cardTemplate">
+    <article class="part-card">
+      <div class="part-head">
+        <div class="part-fields">
+          <label>Cantidad<input class="qty" type="number" min="0" step="0.01"></label>
+          <label class="grow">Referencia / descripción<input class="description" type="text"></label>
+          <label>Unidad<input class="unit" type="text"></label>
+        </div>
+        <button class="icon-button remove-part" title="Eliminar partida">×</button>
+      </div>
+      <div class="scheme-box hidden">
+        <strong>Esquema obligatorio</strong>
+        <span>Esta partida no se valorará hasta adjuntar el esquema indicado en la medición.</span>
+        <input class="scheme" type="file" accept="image/*,.pdf">
+        <small class="scheme-name"></small>
+      </div>
+      <div class="components-head"><strong>Componentes de la partida</strong><button class="secondary add-component">+ Añadir producto</button></div>
+      <div class="component-list"></div>
+      <div class="part-footer"><span class="status"></span><strong class="part-total">0,00 €</strong></div>
+    </article>
+  </template>
+
+  <template id="componentTemplate">
+    <div class="component-row">
+      <input class="component-qty" type="number" min="0" step="0.01" value="1" title="Cantidad">
+      <input class="component-ref" type="text" placeholder="Referencia / concepto">
+      <input class="component-price" type="number" min="0" step="0.01" placeholder="Precio unitario">
+      <select class="component-source"><option value="manual">Precio manual</option><option value="catalogo">Catálogo</option><option value="historico">Histórico</option><option value="criterio">Criterio técnico</option></select>
+      <input class="component-note" type="text" placeholder="En qué se basa el precio">
+      <strong class="component-total">0,00 €</strong>
+      <button class="icon-button remove-component" title="Eliminar">×</button>
+    </div>
   </template>
 
   <script src="app.js"></script>
