@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tarificador de Mediciones | Eléctrica BT</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <strong>ELÉCTRICA BT</strong>
+      <span>Tarificador de mediciones</span>
+    </div>
+    <span class="badge">Borrador interno</span>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <p class="eyebrow">PRESUPUESTOS · MEDICIONES</p>
+      <h1>Convierte mediciones en una valoración revisable</h1>
+      <p>Pega las partidas, revisa cantidades y precios y conserva el criterio usado para cada valoración antes de llevarla a Odoo.</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>1. Introducir mediciones</h2>
+          <p>Una partida por línea. Formato recomendado: cantidad · referencia o descripción · unidad.</p>
+        </div>
+      </div>
+      <textarea id="measurementInput" rows="9" placeholder="Ejemplo:\n12 | Punto de luz sencillo | ud\n35 | Línea 3x2,5 mm² | m\n1 | Cuadro eléctrico según esquema | ud"></textarea>
+      <div class="actions">
+        <button id="loadExample" class="secondary">Cargar ejemplo</button>
+        <button id="analyze">Analizar mediciones</button>
+      </div>
+    </section>
+
+    <section id="resultsPanel" class="panel hidden">
+      <div class="panel-head">
+        <div>
+          <h2>2. Revisar partidas</h2>
+          <p>Primero cantidad y después referencia/descripción.</p>
+        </div>
+        <button id="addRow" class="secondary">+ Añadir partida</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Cantidad</th><th>Referencia / descripción</th><th>Unidad</th><th>Precio unit.</th><th>Total</th><th>Estado</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="summary">
+        <div><span>Partidas</span><strong id="lineCount">0</strong></div>
+        <div><span>Total estimado</span><strong id="grandTotal">0,00 €</strong></div>
+      </div>
+    </section>
+
+    <section id="tracePanel" class="panel hidden">
+      <h2>3. Trazabilidad</h2>
+      <p>Cada valoración indicará en qué se basa. En esta primera versión, los precios introducidos manualmente quedan identificados como tales.</p>
+      <div id="traceList" class="trace-list"></div>
+    </section>
+  </main>
+
+  <template id="rowTemplate">
+    <tr>
+      <td><input class="qty" type="number" min="0" step="0.01" /></td>
+      <td><input class="description" type="text" /></td>
+      <td><input class="unit" type="text" /></td>
+      <td><input class="price" type="number" min="0" step="0.01" placeholder="0,00" /></td>
+      <td class="total">0,00 €</td>
+      <td class="status"></td>
+      <td><button class="icon-button remove" title="Eliminar">×</button></td>
+    </tr>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
