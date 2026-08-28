@@ -1,33 +1,35 @@
 window.CATALOG_LOAD_ERROR=null;
-
+const REPO='Guimi77/tarificador-mediciones',BRANCH='develop',CATALOG_PATH='catalog.csv';
 const cleanKey=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 const pickField=(row,names)=>{for(const name of names){if(row?.[name]!=null&&row[name]!=='')return row[name];}for(const [key,value] of Object.entries(row||{})){const k=cleanKey(key);if(names.some(name=>k===cleanKey(name)||k.includes(cleanKey(name))))return value;}return '';};
 const toPrice=value=>{if(typeof value==='number')return value;let s=String(value??'').trim().replace(/\s/g,'').replace(/€/g,'');if(!s)return 0;if(s.includes(',')&&s.includes('.'))s=s.lastIndexOf(',')>s.lastIndexOf('.')?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');else if(s.includes(','))s=s.replace(',','.');const n=Number(s.replace(/[^0-9.-]/g,''));return Number.isFinite(n)?n:0;};
 const normalizeCatalog=rows=>(rows||[]).map(row=>({r:String(row.r??pickField(row,['Referencia interna','referencia','default_code'])??'').trim(),n:String(row.n??pickField(row,['Nombre','nombre','name'])??'').trim(),p:toPrice(row.p??pickField(row,['Precio de venta','precio venta','list_price','precio'])),c:String(row.c??pickField(row,['Categoría de producto','categoria de producto','categoría','categoria','categ_id'])??'').trim()})).filter(p=>p.r||p.n);
-
 try{if(window.PRODUCT_CATALOG_READY)await window.PRODUCT_CATALOG_READY;window.PRODUCT_CATALOG=normalizeCatalog(window.PRODUCT_CATALOG);}catch(error){window.CATALOG_LOAD_ERROR=error;}
 
-const badge=document.getElementById('catalogBadge');
-const catalogFile=document.getElementById('catalogFile');
-const catalogMessage=document.getElementById('catalogMessage');
-const updateBadge=()=>{const count=(window.PRODUCT_CATALOG||[]).length;const ok=count>0&&!window.CATALOG_LOAD_ERROR;badge?.classList.toggle('catalog-ok',ok);badge?.classList.toggle('catalog-error',!ok);if(badge)badge.innerHTML=`Catálogo Odoo <span class="catalog-check">${ok?'✓':'!'}</span><small>${count.toLocaleString('es-ES')} productos</small>`;};
-updateBadge();
+const $=id=>document.getElementById(id),badge=$('catalogBadge'),catalogFile=$('catalogFile'),catalogMessage=$('catalogMessage'),modal=$('catalogModal'),compare=$('catalogCompare'),tokenInput=$('githubToken'),publishStatus=$('publishStatus');
+let pending=null;
+const currentCatalog=()=>window.PRODUCT_CATALOG||[];
+const updateBadge=()=>{const count=currentCatalog().length,ok=count>0&&!window.CATALOG_LOAD_ERROR;badge?.classList.toggle('catalog-ok',ok);badge?.classList.toggle('catalog-error',!ok);if(badge)badge.innerHTML=`Catálogo Odoo <span class="catalog-check">${ok?'✓':'!'}</span><small>${count.toLocaleString('es-ES')} productos</small>`;$('catalogCurrentInfo').textContent=ok?`${count.toLocaleString('es-ES')} productos cargados correctamente`:'Error al cargar el catálogo oficial';};
+function populateOptions(){const options=$('catalogOptions');if(!options)return;const frag=document.createDocumentFragment();currentCatalog().forEach(p=>{const o=document.createElement('option');o.value=p.r||p.n;o.label=`${p.n} · ${p.p.toLocaleString('es-ES',{style:'currency',currency:'EUR'})}`;frag.appendChild(o)});options.replaceChildren(frag);}
+updateBadge();populateOptions();
 
-function populateOptions(){const options=document.getElementById('catalogOptions');if(!options)return;const frag=document.createDocumentFragment();(window.PRODUCT_CATALOG||[]).forEach(p=>{const o=document.createElement('option');o.value=p.r||p.n;o.label=`${p.n} · ${p.p.toLocaleString('es-ES',{style:'currency',currency:'EUR'})}`;frag.appendChild(o)});options.replaceChildren(frag);}
-populateOptions();
+const key=p=>(p.r||p.n).trim().toLowerCase();
+function diffCatalog(oldRows,newRows){const oldMap=new Map(oldRows.map(p=>[key(p),p])),newMap=new Map(newRows.map(p=>[key(p),p]));const added=[],removed=[],changed=[];for(const [k,p] of newMap){const old=oldMap.get(k);if(!old)added.push(p);else if(Math.abs(old.p-p.p)>.0001||old.n!==p.n||old.c!==p.c)changed.push({old,p});}for(const [k,p] of oldMap)if(!newMap.has(k))removed.push(p);return{added,removed,changed};}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function renderDiff(products,diff){$('compareTotal').textContent=products.length.toLocaleString('es-ES');$('compareAdded').textContent=diff.added.length;$('compareChanged').textContent=diff.changed.length;$('compareRemoved').textContent=diff.removed.length;const sections=[];if(diff.added.length)sections.push(`<h4>Nuevos</h4>${diff.added.slice(0,100).map(p=>`<div><b>${esc(p.r||'Sin ref.')}</b> ${esc(p.n)} · ${p.p.toFixed(2)} €</div>`).join('')}`);if(diff.changed.length)sections.push(`<h4>Cambios</h4>${diff.changed.slice(0,100).map(x=>`<div><b>${esc(x.p.r||x.p.n)}</b> ${x.old.p.toFixed(2)} € → ${x.p.p.toFixed(2)} €</div>`).join('')}`);if(diff.removed.length)sections.push(`<h4>Eliminados / obsoletos</h4>${diff.removed.slice(0,100).map(p=>`<div><b>${esc(p.r||'Sin ref.')}</b> ${esc(p.n)}</div>`).join('')}`);$('compareDetails').innerHTML=sections.join('')||'<div>Sin cambios respecto al catálogo actual.</div>';compare.classList.remove('hidden');}
 
-catalogFile?.addEventListener('change',async()=>{
-  const file=catalogFile.files?.[0];if(!file)return;
-  try{
-    if(!/\.csv$/i.test(file.name))throw new Error('Selecciona un archivo CSV');
-    const products=normalizeCatalog(window.CATALOG_PARSE_CSV(await file.text()));
-    if(!products.length)throw new Error('No se han encontrado productos válidos');
-    window.PRODUCT_CATALOG=products;window.CATALOG_LOAD_ERROR=null;populateOptions();updateBadge();
-    catalogMessage.textContent=`Catálogo cargado: ${products.length.toLocaleString('es-ES')} productos. Se usará durante esta sesión.`;catalogMessage.className='catalog-message success';
-    window.dispatchEvent(new CustomEvent('catalog-ready',{detail:{count:products.length,source:'uploaded'}}));
-  }catch(error){catalogMessage.textContent=`No se ha cargado: ${error.message||error}`;catalogMessage.className='catalog-message error';}
-  finally{catalogFile.value='';}
-});
+badge?.addEventListener('click',()=>{modal.classList.remove('hidden');updateBadge();});
+$('closeCatalogModal')?.addEventListener('click',()=>modal.classList.add('hidden'));
+modal?.addEventListener('click',e=>{if(e.target===modal)modal.classList.add('hidden');});
+tokenInput.value=sessionStorage.getItem('catalogGithubToken')||'';
+tokenInput.addEventListener('input',()=>sessionStorage.setItem('catalogGithubToken',tokenInput.value.trim()));
+
+catalogFile?.addEventListener('change',async()=>{const file=catalogFile.files?.[0];if(!file)return;publishStatus.textContent='';try{if(!/\.csv$/i.test(file.name))throw new Error('Selecciona un archivo CSV');const text=await file.text(),products=normalizeCatalog(window.CATALOG_PARSE_CSV(text));if(!products.length)throw new Error('No se han encontrado productos válidos');const refs=products.map(key),duplicates=refs.filter((v,i)=>refs.indexOf(v)!==i);if(duplicates.length)throw new Error(`Hay ${new Set(duplicates).size} referencias duplicadas`);pending={text,products,diff:diffCatalog(currentCatalog(),products),name:file.name};renderDiff(products,pending.diff);publishStatus.textContent=`${file.name} validado correctamente.`;publishStatus.className='publish-status success';}catch(error){pending=null;compare.classList.add('hidden');publishStatus.textContent=`No se ha cargado: ${error.message||error}`;publishStatus.className='publish-status error';}finally{catalogFile.value='';}});
+
+$('useCatalogSession')?.addEventListener('click',()=>{if(!pending)return;window.PRODUCT_CATALOG=pending.products;window.CATALOG_LOAD_ERROR=null;populateOptions();updateBadge();catalogMessage.textContent=`Catálogo temporal activo: ${pending.products.length.toLocaleString('es-ES')} productos.`;catalogMessage.className='catalog-message success';modal.classList.add('hidden');window.dispatchEvent(new CustomEvent('catalog-ready',{detail:{count:pending.products.length,source:'uploaded'}}));});
+
+async function gh(path,options={}){const token=tokenInput.value.trim();if(!token)throw new Error('Introduce el token administrador de GitHub');const res=await fetch(`https://api.github.com/repos/${REPO}/${path}`,{...options,headers:{Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',Authorization:`Bearer ${token}`,...options.headers}});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.message||`GitHub respondió ${res.status}`);return data;}
+$('publishCatalog')?.addEventListener('click',async()=>{if(!pending)return;const btn=$('publishCatalog');btn.disabled=true;publishStatus.textContent='Publicando catálogo oficial…';publishStatus.className='publish-status';try{const current=await gh(`contents/${CATALOG_PATH}?ref=${BRANCH}`);const bytes=new TextEncoder().encode(pending.text);let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));const content=btoa(binary);const result=await gh(`contents/${CATALOG_PATH}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:`data: update official Odoo catalog (${pending.products.length} products)`,content,sha:current.sha,branch:BRANCH})});window.PRODUCT_CATALOG=pending.products;window.CATALOG_LOAD_ERROR=null;populateOptions();updateBadge();publishStatus.textContent=`Publicado correctamente. ${pending.products.length.toLocaleString('es-ES')} productos son ahora el catálogo oficial.`;publishStatus.className='publish-status success';catalogMessage.textContent='Catálogo Odoo oficial actualizado. GitHub Pages publicará automáticamente esta versión.';catalogMessage.className='catalog-message success';pending=null;setTimeout(()=>modal.classList.add('hidden'),1800);window.dispatchEvent(new CustomEvent('catalog-ready',{detail:{count:currentCatalog().length,source:'published',commit:result.commit?.sha}}));}catch(error){publishStatus.textContent=`No se pudo publicar: ${error.message||error}`;publishStatus.className='publish-status error';}finally{btn.disabled=false;}});
 
 await import('./app.js');
-window.dispatchEvent(new CustomEvent(window.CATALOG_LOAD_ERROR?'catalog-error':'catalog-ready',{detail:{count:(window.PRODUCT_CATALOG||[]).length,message:window.CATALOG_LOAD_ERROR?.message||''}}));
+window.dispatchEvent(new CustomEvent(window.CATALOG_LOAD_ERROR?'catalog-error':'catalog-ready',{detail:{count:currentCatalog().length,message:window.CATALOG_LOAD_ERROR?.message||''}}));
