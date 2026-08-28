@@ -1,0 +1,58 @@
+name: Build plain catalog CSV
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'catalog-src-*.b64'
+      - '.github/workflows/build-catalog.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Build catalog.csv from verified source
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64, gzip, csv, glob
+          paths=sorted(glob.glob('catalog-src-*.b64'))
+          assert paths, 'Missing catalog source chunks'
+          encoded=''.join(open(p,encoding='ascii').read().strip() for p in paths)
+          raw=gzip.decompress(base64.b64decode(encoded, validate=True))
+          open('catalog.csv','wb').write(raw)
+          with open('catalog.csv',encoding='utf-8-sig',newline='') as f:
+              rows=list(csv.DictReader(f))
+          assert len(rows)==1126, f'Expected 1126 products, got {len(rows)}'
+          refs={r['Referencia interna'].strip():r for r in rows}
+          checks={'BUCMONO MONOBUC CPMMONO 482021':165.0,'PLS':68.2,'PIQUETA':59.65}
+          for ref,price in checks.items():
+              row=refs.get(ref)
+              assert row, f'Missing {ref}'
+              assert abs(float(row['Precio de venta'])-price)<0.001, f'Bad price for {ref}'
+          a3=next((r for r in rows if r['Referencia interna'].strip().startswith("A3X1'5")),None)
+          assert a3 and abs(float(a3['Precio de venta'])-4.0)<0.001, "Missing/bad A3X1'5"
+          print(f'VERIFIED {len(rows)} products')
+          PY
+
+      - name: Commit catalog.csv
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add catalog.csv
+          if git diff --cached --quiet; then
+            echo 'catalog.csv already up to date'
+          else
+            git commit -m 'data: publish verified Odoo catalog CSV'
+            git push origin HEAD:develop
+          fi
