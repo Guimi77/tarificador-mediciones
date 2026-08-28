@@ -19,23 +19,33 @@ jobs:
         with:
           ref: develop
           fetch-depth: 0
-      - name: Rebuild catalog.csv
+
+      - name: Rebuild and verify catalog.csv
         shell: bash
         run: |
           python - <<'PY'
-          import re, base64, gzip, csv, glob
+          import base64, gzip, csv, glob, re
+
           parts=[]
           for path in sorted(glob.glob('catalog-data-*.js')):
               text=open(path,encoding='utf-8').read()
-              m=re.search(r"push\('([^']*)'\)", text, re.S)
-              if not m:
-                  raise SystemExit(f'No base64 payload in {path}')
-              parts.append(m.group(1))
-          payload=''.join(parts)
-          raw=gzip.decompress(base64.b64decode(payload, validate=True))
+              marker="push('"
+              if marker not in text:
+                  raise SystemExit(f'No payload marker in {path}')
+              payload=text.split(marker,1)[1]
+              # Some old chunks were saved without the closing JS characters.
+              # Base64 itself only uses A-Z a-z 0-9 + / =, so keep only those.
+              payload=''.join(re.findall(r'[A-Za-z0-9+/=]+', payload))
+              parts.append(payload)
+              print(path, len(payload))
+
+          encoded=''.join(parts)
+          raw=gzip.decompress(base64.b64decode(encoded, validate=True))
           open('catalog.csv','wb').write(raw)
+
           with open('catalog.csv',encoding='utf-8-sig',newline='') as f:
               rows=list(csv.DictReader(f))
+
           assert len(rows)==1126, f'Expected 1126 products, got {len(rows)}'
           refs={r['Referencia interna'].strip():r for r in rows}
           checks={
@@ -46,10 +56,15 @@ jobs:
           for ref,price in checks.items():
               row=refs.get(ref)
               assert row, f'Missing {ref}'
-              assert abs(float(row['Precio de venta'])-price)<0.001, f'Bad price for {ref}'
-          assert any(r['Referencia interna'].strip().startswith("A3X1'5") and abs(float(r['Precio de venta'])-4.0)<0.001 for r in rows), "Missing A3X1'5"
-          print('Verified 1126 products and key references')
+              assert abs(float(row['Precio de venta'])-price)<0.001, f'Bad price for {ref}: {row["Precio de venta"]}'
+
+          a3=next((r for r in rows if r['Referencia interna'].strip().startswith("A3X1'5")),None)
+          assert a3, "Missing A3X1'5"
+          assert abs(float(a3['Precio de venta'])-4.0)<0.001, f'Bad price for A3X1\'5: {a3["Precio de venta"]}'
+
+          print('VERIFIED: 1126 products; BUCMONO, PLS, PIQUETA and A3X1\'5 OK')
           PY
+
       - name: Commit catalog.csv
         shell: bash
         run: |
@@ -59,6 +74,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'catalog.csv already up to date'
           else
-            git commit -m 'data: rebuild plain Odoo catalog CSV'
+            git commit -m 'data: rebuild verified Odoo catalog CSV'
             git push origin HEAD:develop
           fi
