@@ -5,7 +5,7 @@ on:
   push:
     branches: [develop]
     paths:
-      - 'catalog-data-*.js'
+      - 'catalog-src-*.b64'
       - '.github/workflows/build-catalog.yml'
 
 permissions:
@@ -20,52 +20,28 @@ jobs:
           ref: develop
           fetch-depth: 0
 
-      - name: Rebuild and verify catalog.csv
+      - name: Build catalog.csv from verified source
         shell: bash
         run: |
           python - <<'PY'
-          import base64, gzip, csv, glob, re
-
-          parts=[]
-          for path in sorted(glob.glob('catalog-data-*.js')):
-              text=open(path,encoding='utf-8').read()
-              marker="push('"
-              if marker not in text:
-                  raise SystemExit(f'No payload marker in {path}')
-              payload=text.split(marker,1)[1]
-              if "')" in payload:
-                  payload=payload.split("')",1)[0]
-              payload=''.join(re.findall(r'[A-Za-z0-9+/=]+', payload))
-              parts.append(payload)
-              print(path, len(payload))
-
-          encoded=''.join(parts).rstrip('=')
-          encoded += '=' * (-len(encoded) % 4)
-          print('combined base64 length',len(encoded),'mod4',len(encoded)%4)
-
+          import base64, gzip, csv, glob
+          paths=sorted(glob.glob('catalog-src-*.b64'))
+          assert paths, 'Missing catalog source chunks'
+          encoded=''.join(open(p,encoding='ascii').read().strip() for p in paths)
           raw=gzip.decompress(base64.b64decode(encoded, validate=True))
           open('catalog.csv','wb').write(raw)
-
           with open('catalog.csv',encoding='utf-8-sig',newline='') as f:
               rows=list(csv.DictReader(f))
-
           assert len(rows)==1126, f'Expected 1126 products, got {len(rows)}'
           refs={r['Referencia interna'].strip():r for r in rows}
-          checks={
-            'BUCMONO MONOBUC CPMMONO 482021':165.0,
-            'PLS':68.2,
-            'PIQUETA':59.65,
-          }
+          checks={'BUCMONO MONOBUC CPMMONO 482021':165.0,'PLS':68.2,'PIQUETA':59.65}
           for ref,price in checks.items():
               row=refs.get(ref)
               assert row, f'Missing {ref}'
-              assert abs(float(row['Precio de venta'])-price)<0.001, f'Bad price for {ref}: {row["Precio de venta"]}'
-
+              assert abs(float(row['Precio de venta'])-price)<0.001, f'Bad price for {ref}'
           a3=next((r for r in rows if r['Referencia interna'].strip().startswith("A3X1'5")),None)
-          assert a3, "Missing A3X1'5"
-          assert abs(float(a3['Precio de venta'])-4.0)<0.001, f'Bad price for A3X1\'5: {a3["Precio de venta"]}'
-
-          print('VERIFIED: 1126 products; BUCMONO, PLS, PIQUETA and A3X1\'5 OK')
+          assert a3 and abs(float(a3['Precio de venta'])-4.0)<0.001, "Missing/bad A3X1'5"
+          print(f'VERIFIED {len(rows)} products')
           PY
 
       - name: Commit catalog.csv
@@ -77,6 +53,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'catalog.csv already up to date'
           else
-            git commit -m 'data: rebuild verified Odoo catalog CSV'
+            git commit -m 'data: publish verified Odoo catalog CSV'
             git push origin HEAD:develop
           fi
