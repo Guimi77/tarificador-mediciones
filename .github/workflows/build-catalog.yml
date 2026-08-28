@@ -33,13 +33,16 @@ jobs:
               if marker not in text:
                   raise SystemExit(f'No payload marker in {path}')
               payload=text.split(marker,1)[1]
-              # Some old chunks were saved without the closing JS characters.
-              # Base64 itself only uses A-Z a-z 0-9 + / =, so keep only those.
+              if "')" in payload:
+                  payload=payload.split("')",1)[0]
               payload=''.join(re.findall(r'[A-Za-z0-9+/=]+', payload))
               parts.append(payload)
               print(path, len(payload))
 
-          encoded=''.join(parts)
+          encoded=''.join(parts).rstrip('=')
+          encoded += '=' * (-len(encoded) % 4)
+          print('combined base64 length',len(encoded),'mod4',len(encoded)%4)
+
           raw=gzip.decompress(base64.b64decode(encoded, validate=True))
           open('catalog.csv','wb').write(raw)
 
