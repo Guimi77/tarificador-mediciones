@@ -1,13 +1,18 @@
 # Tarificador de Mediciones
 
-Aplicación interna para analizar mediciones, asociar partidas y obtener una valoración orientativa antes de trasladarla a Odoo.
+> **PROYECTO OBSOLETO / DEPRECATED**
+>
+> Este proyecto fue una prueba interna y ya no se considera parte activa de la arquitectura de ELECTRICA BT.
+>
+> Su funcionalidad ha sido sustituida por **Xispa**, una solución posterior que cubre mejor el análisis de mediciones, valoración y flujos relacionados.
 
-## Objetivo inicial
+## Estado
 
-- Importar o pegar mediciones.
-- Gestionar varias líneas/productos por partida.
-- Valorar partidas con trazabilidad del criterio utilizado.
-- Exigir esquema adjunto cuando una partida de cuadro eléctrico indique "según esquema".
-- Registrar correcciones para mejorar futuras valoraciones.
+- No se desarrollará nueva funcionalidad en este repositorio.
+- No debe utilizarse como dependencia de otros proyectos.
+- Se conserva únicamente como referencia histórica.
+- El catálogo y el código antiguo permanecen disponibles en esta rama mientras el repositorio exista.
 
-> El precio final se valida y traslada posteriormente a Odoo.
+## Sustitución
+
+**Xispa** es el proyecto vigente para estas funciones.
